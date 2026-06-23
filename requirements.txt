@@ -1,0 +1,8 @@
+python
+tkinter
+statistics
+pathlib
+webbrowser
+math
+csv
+pathlib
