@@ -403,32 +403,20 @@ class AnimeRecommenderApp(tk.Tk):
 
         for anime in self.animes:
 
-            # if terms:
-            #     title = anime["title"].lower()
-            #     genres = {g.lower() for g in anime["genres"]}
+            if terms:
+                title_lower = anime["title"].lower()
+                genres_normalized = {g.lower() for g in anime["genres"]}
 
-            #     match = True
+                match = True
 
-            #     for term in terms:
-            #         # Cada termo deve existir no título OU nos gêneros
-            #         if term not in title and term not in genres:
-            #             match = False
-            #             break
+                for term in terms:
+                    term_clean = term.replace("'", "").lower()
+                    # Cada termo deve existir no título OU nos gêneros
+                    if term_clean not in title_lower and term_clean not in genres_normalized:
+                        match = False
+                        break
 
-            #     if not match:
-            #         continue
-
-            if query:
-                in_title = query in anime["title"].lower()
-                # Separa por virgula para buscar multiplos generos
-                genre_terms = [t.strip().replace("'", "").lower() for t in query.split(",")]
-                # Todos os termos devem encontrar um genero correspondente
-                in_genre = all(
-                    any(term in g.replace(" ", "").replace("'", "").lower()
-                        for g in anime["genres"])
-                    for term in genre_terms
-                ) if genre_terms else False
-                if not in_title and not in_genre:
+                if not match:
                     continue
 
             total_matches += 1
