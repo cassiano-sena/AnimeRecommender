@@ -1,11 +1,51 @@
 """Leitura e normalizacao dos dados de animes do CSV."""
 
 import csv
+import threading
+import urllib.request
 from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data" / "urlanime1.csv"
+
+# Cache para URLs validadas: {url: bool}
+_valid_url_cache = {}
+_cache_lock = threading.Lock()
+
+
+def validate_image_url(url):
+    """Verifica se a URL da imagem e valida (retorna HTTP 200 com imagem)."""
+    if not url:
+        return False
+    with _cache_lock:
+        if url in _valid_url_cache:
+            return _valid_url_cache[url]
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                content_type = response.headers.get("Content-Type", "")
+                if "image" in content_type:
+                    with _cache_lock:
+                        _valid_url_cache[url] = True
+                    return True
+    except Exception:
+        pass
+    with _cache_lock:
+        _valid_url_cache[url] = False
+    return False
+
+
+def prefetch_valid_urls(animes):
+    """Pre-valida URLs de imagem em background."""
+    def _prefetch():
+        for anime in animes:
+            url = anime.get("image", "")
+            if url:
+                validate_image_url(url)
+    thread = threading.Thread(target=_prefetch, daemon=True)
+    thread.start()
 
 
 def parse_float(value, default=0.0):

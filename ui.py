@@ -6,12 +6,37 @@ from pathlib import Path
 from tkinter import messagebox, ttk
 import webbrowser
 
-from data_service import load_animes
+import io
+import urllib.request
+from pathlib import Path
+
+from data_service import load_animes, validate_image_url, prefetch_valid_urls
 from recommendation_engine import RecommendationEngine, TOP_N, format_score
 from theme import COLORS, configure_theme
 
 
 BACKGROUND_IMAGE_PATH = Path(__file__).resolve().parent / "assets" / "anime_background.png"
+
+
+def _load_poster_image(url, target_w=160, target_h=210):
+    """Baixa a capa do anime e a redimensiona via Pillow, preservando a proporcao
+    original (usa toda a imagem, sem cortar nenhuma parte)."""
+    if not url:
+        return None
+    try:
+        from PIL import Image, ImageTk
+        resample = getattr(Image, "Resampling", Image).LANCZOS
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status == 200:
+                data = response.read()
+                img = Image.open(io.BytesIO(data)).convert("RGBA")
+                # thumbnail redimensiona mantendo a proporcao e nunca excede a caixa alvo
+                img.thumbnail((target_w, target_h), resample)
+                return ImageTk.PhotoImage(img)
+    except Exception:
+        pass
+    return None
 
 
 class AnimeRecommenderApp(tk.Tk):
@@ -42,6 +67,7 @@ class AnimeRecommenderApp(tk.Tk):
         self.build_layout()
         self.refresh_anime_list()
         self.refresh_rated_list()
+        prefetch_valid_urls(self.animes)
 
     def load_background_image(self):
         if not BACKGROUND_IMAGE_PATH.exists():
@@ -265,7 +291,7 @@ class AnimeRecommenderApp(tk.Tk):
 
         details = ttk.Frame(catalog, style="Soft.TFrame", padding=12)
         details.pack(fill="x", pady=(12, 0))
-        self.poster = tk.Canvas(details, width=118, height=160, bg=COLORS["panel_alt"], highlightthickness=0)
+        self.poster = tk.Canvas(details, width=170, height=240, bg=COLORS["panel_alt"], highlightthickness=0)
         self.poster.pack(side="left", padx=(0, 12))
         info = ttk.Frame(details, style="Soft.TFrame")
         info.pack(side="left", fill="both", expand=True)
@@ -377,19 +403,32 @@ class AnimeRecommenderApp(tk.Tk):
 
         for anime in self.animes:
 
-            if terms:
-                title = anime["title"].lower()
-                genres = {g.lower() for g in anime["genres"]}
+            # if terms:
+            #     title = anime["title"].lower()
+            #     genres = {g.lower() for g in anime["genres"]}
 
-                match = True
+            #     match = True
 
-                for term in terms:
-                    # Cada termo deve existir no título OU nos gêneros
-                    if term not in title and term not in genres:
-                        match = False
-                        break
+            #     for term in terms:
+            #         # Cada termo deve existir no título OU nos gêneros
+            #         if term not in title and term not in genres:
+            #             match = False
+            #             break
 
-                if not match:
+            #     if not match:
+            #         continue
+
+            if query:
+                in_title = query in anime["title"].lower()
+                # Separa por virgula para buscar multiplos generos
+                genre_terms = [t.strip().replace("'", "").lower() for t in query.split(",")]
+                # Todos os termos devem encontrar um genero correspondente
+                in_genre = all(
+                    any(term in g.replace(" ", "").replace("'", "").lower()
+                        for g in anime["genres"])
+                    for term in genre_terms
+                ) if genre_terms else False
+                if not in_title and not in_genre:
                     continue
 
             total_matches += 1
@@ -462,50 +501,63 @@ class AnimeRecommenderApp(tk.Tk):
 
     def draw_poster(self, anime):
         self.poster.delete("all")
-        width = 118
-        height = 160
+        width = 170
+        height = 240
+        pad = 9
+        footer_height = 46
+        image_area_w = width - 2 * pad
+        image_area_h = height - 2 * pad - footer_height
         palette = ["#0e7490", "#be185d", "#7c3aed", "#ca8a04", "#16a34a", "#dc2626"]
         cluster = anime["cluster"] if anime else 0
         color = palette[abs(cluster) % len(palette)]
         self.poster.create_rectangle(0, 0, width, height, fill="#0b1120", outline=COLORS["line"])
-        self.poster.create_rectangle(9, 9, width - 9, height - 9, fill=color, outline="")
-        self.poster.create_rectangle(9, 104, width - 9, height - 9, fill="#111827", outline="")
-        self.poster.create_text(width // 2, 42, text="ANIME", fill="#f8fafc", font=("Segoe UI", 16, "bold"))
+        self.poster.create_rectangle(pad, pad, width - pad, height - pad, fill=color, outline="")
+        self.poster.create_rectangle(pad, height - pad - footer_height, width - pad, height - pad, fill="#111827", outline="")
+
+        image = None
+        if anime:
+            url = anime.get("image", "")
+            if url and validate_image_url(url):
+                image = _load_poster_image(url, image_area_w, image_area_h)
+
+        if image:
+            self._current_poster_image = image
+            iw = image.width()
+            ih = image.height()
+            # A imagem ja vem redimensionada (sem cortar); apenas centralizamos na area disponivel
+            x = pad + image_area_w // 2
+            y = pad + image_area_h // 2
+            self.poster.create_image(x, y, image=image, anchor="center")
+        else:
+            self.poster.create_text(width // 2, pad + image_area_h // 2, text="ANIME", fill="#f8fafc", font=("Segoe UI", 16, "bold"))
+
         if anime:
             title = anime["title"]
-            
-            # 1. Reduzimos o limite de 32 para 24 caracteres para forçar no máximo 2 linhas
-            short_title = title[:24] + ("..." if len(title) > 24 else "")
-            
-            # 2. Ajuste dinâmico do tamanho da fonte: se o título for longo, usamos tamanho 7
-            font_size = 7 if len(short_title) > 18 else 8
-            
-            # 3. Posiciona o título ancorado no topo (Y=108)
+            short_title = title[:30] + ("..." if len(title) > 30 else "")
+            font_size = 8 if len(short_title) > 22 else 9
             self.poster.create_text(
-                width // 2, 108, 
-                text=short_title, 
-                fill="#f8fafc", 
-                font=("Segoe UI", font_size, "bold"), # <-- Fonte dinâmica aqui
-                width=100, # Aumentado ligeiramente a largura útil para as letras respirarem
+                width // 2, height - footer_height - pad + 8,
+                text=short_title,
+                fill="#f8fafc",
+                font=("Segoe UI", font_size, "bold"),
+                width=image_area_w,
                 anchor="n",
                 justify="center"
             )
-            
-            # 4. Trava o Score na linha limite inferior do pôster (Y=150) ancorado na base
             self.poster.create_text(
-                width // 2, 150, 
-                text=f"Score {format_score(anime['score'])}", 
-                fill=COLORS["gold"], 
-                font=("Segoe UI", 8, "bold"),
+                width // 2, height - pad - 6,
+                text=f"Score {format_score(anime['score'])}",
+                fill=COLORS["gold"],
+                font=("Segoe UI", 9, "bold"),
                 anchor="s"
             )
         else:
             self.poster.create_text(
-                width // 2, 126, 
-                text="selecione um titulo", 
-                fill="#cbd5e1", 
-                font=("Segoe UI", 8, "bold"), 
-                width=92
+                width // 2, height // 2,
+                text="selecione um titulo",
+                fill="#cbd5e1",
+                font=("Segoe UI", 8, "bold"),
+                width=image_area_w
             )
 
     def add_selected_rating(self):

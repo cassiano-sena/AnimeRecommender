@@ -6,3 +6,4 @@ webbrowser
 math
 csv
 pathlib
+Pillow
