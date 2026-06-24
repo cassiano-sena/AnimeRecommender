@@ -364,30 +364,59 @@ class AnimeRecommenderApp(tk.Tk):
 
     def refresh_anime_list(self):
         query = self.search_var.get().strip().lower()
-        # Se a query for idêntica ao texto do placeholder, tratamos como vazia
+
         if query == "buscar por título ou gênero...":
             query = ""
-            
+
+        terms = query.split()
+
         self.anime_tree.delete(*self.anime_tree.get_children())
+
         count = 0
         total_matches = 0
+
         for anime in self.animes:
-            if query and query not in anime["title"].lower() and query not in anime["genre"].lower():
-                continue
+
+            if terms:
+                title = anime["title"].lower()
+                genres = {g.lower() for g in anime["genres"]}
+
+                match = True
+
+                for term in terms:
+                    # Cada termo deve existir no título OU nos gêneros
+                    if term not in title and term not in genres:
+                        match = False
+                        break
+
+                if not match:
+                    continue
+
             total_matches += 1
+
             if count >= 250:
                 continue
+
             self.anime_tree.insert(
                 "",
                 "end",
                 iid=str(anime["id"]),
-                values=(anime["title"], format_score(anime["score"]), f"{anime['members']:,}", anime["cluster"]),
+                values=(
+                    anime["title"],
+                    format_score(anime["score"]),
+                    f"{anime['members']:,}",
+                    anime["cluster"],
+                ),
                 tags=("even" if count % 2 == 0 else "odd",),
             )
+
             count += 1
+
         shown = f"{count:,} exibidos"
+
         if total_matches > count:
             shown += f" de {total_matches:,}"
+
         self.catalog_count_var.set(shown)
 
     def refresh_rated_list(self):
