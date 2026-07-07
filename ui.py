@@ -142,8 +142,7 @@ class AnimeRecommenderApp(tk.Tk):
         ttk.Label(text_block, text="Anime Recommender", style="Header.TLabel").pack(anchor="w")
         badges = ttk.Frame(title_row, style="Panel.TFrame")
         badges.pack(side="right")
-        ttk.Label(badges, text=f"{len(self.animes):,} titulos", style="Badge.TLabel").pack(side="left", padx=(0, 8))
-        ttk.Label(badges, text=f"Top {TOP_N}", style="Badge.TLabel").pack(side="left")
+        ttk.Label(badges, text=f"{len(self.animes):,} titulos", style="Badge.TLabel").pack(side="left")
 
         left = ttk.Frame(self.shell, style="TFrame")
         right = ttk.Frame(self.shell, style="TFrame")
@@ -386,6 +385,7 @@ class AnimeRecommenderApp(tk.Tk):
         table.tag_configure("top", background="#164e63", foreground="#ecfeff")
         table.pack(fill="both", expand=True)
         table.bind("<Double-1>", self.open_recommendation_link)
+        table.bind("<<TreeviewSelect>>", lambda e: self._sync_top_tag(e.widget))
         return table
 
     def refresh_anime_list(self):
@@ -595,6 +595,26 @@ class AnimeRecommenderApp(tk.Tk):
         if anime and anime["link"]:
             webbrowser.open(anime["link"])
 
+    def _sync_top_tag(self, table):
+        """Garante que a tag 'top' (destaque do 1º lugar) nao confunda com selecao.
+
+        Quando o usuario seleciona qualquer linha que NAO seja a primeira, a tag
+        visual 'top' e removida temporariamente do primeiro item para que ele nao
+        parecam ambos selecionados ao mesmo tempo. Ao selecionar a primeira linha
+        (ou limpar a selecao), a tag 'top' e restaurada.
+        """
+        children = table.get_children()
+        if not children:
+            return
+        first_iid = children[0]
+        selected = table.selection()
+        if selected and selected[0] != first_iid:
+            # Outra linha foi selecionada: esconde destaque do 1o lugar
+            table.item(first_iid, tags=("even",))
+        else:
+            # Nada selecionado ou o proprio 1o lugar foi clicado: restaura destaque
+            table.item(first_iid, tags=("top",))
+
     def generate_recommendations(self):
         if not self.ratings:
             messagebox.showwarning("Sem avaliacoes", "Adicione pelo menos uma avaliacao maior que zero.")
@@ -608,6 +628,7 @@ class AnimeRecommenderApp(tk.Tk):
 
     def fill_recommendation_table(self, table, rows):
         table.delete(*table.get_children())
+        table.selection_remove(*table.selection())
         for index, (anime, value) in enumerate(rows):
             table.insert(
                 "",
