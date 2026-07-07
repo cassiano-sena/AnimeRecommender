@@ -143,7 +143,7 @@ class AnimeRecommenderApp(tk.Tk):
         badges = ttk.Frame(title_row, style="Panel.TFrame")
         badges.pack(side="right")
         ttk.Label(badges, text=f"{len(self.animes):,} titulos", style="Badge.TLabel").pack(side="left", padx=(0, 8))
-        ttk.Label(badges, text=f"Top {TOP_N}", style="Badge.TLabel").pack(side="left")
+        # ttk.Label(badges, text=f"Top {TOP_N}", style="Badge.TLabel").pack(side="left")
 
         left = ttk.Frame(self.shell, style="TFrame")
         right = ttk.Frame(self.shell, style="TFrame")
