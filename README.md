@@ -27,7 +27,7 @@ Or, if you are using the Python Launcher on Windows:
 py -m pip install Pillow
 ```
 
-Alternatively, if a `requirements.txt` file is included:
+Alternatively, the `requirements.txt` file is included:
 
 ```bash
 pip install -r requirements.txt
