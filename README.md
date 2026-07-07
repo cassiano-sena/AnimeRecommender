@@ -11,8 +11,8 @@ A Python application that recommends anime based on user preferences through a g
 Clone the repository:
 
 ```bash
-git clone <repository-url>
-cd <project-folder>
+git clone https://github.com/cassiano-sena/AnimeRecommender.git
+cd AnimeRecommender
 ```
 
 Install the required dependency:
